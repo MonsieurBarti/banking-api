@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppException } from '@utils/app-exception';
-import { BankAccounts, BankOperations } from '@prisma/client';
+import { BankAccounts, BankOperations, OperationType } from '@prisma/client';
 import {
   CreateAccount,
   CreateAccountResponse,
@@ -47,7 +47,7 @@ export class BankingService {
 
   async getAccount(id_bank_account: string): Promise<BankAccounts> {
     try {
-      return await this.prisma.bankAccounts.findUnique({
+      const bankAccount = await this.prisma.bankAccounts.findUnique({
         where: { id_bank_account },
         include: {
           BankOperations: {
@@ -58,6 +58,19 @@ export class BankingService {
           },
         },
       });
+      let withdrawals = 0;
+      let deposits = 0;
+      bankAccount.BankOperations.map((operation) => {
+        if (!operation.is_canceled && !operation.is_completed) {
+          operation.type === OperationType.WITHDRAWAL
+            ? (withdrawals += operation.amount)
+            : (deposits += operation.amount);
+        }
+      });
+      return {
+        ...bankAccount,
+        balance: bankAccount.balance + deposits - withdrawals,
+      };
     } catch (error) {
       throw new AppException(
         `Error while getting bank account with id ${id_bank_account}`,
@@ -131,12 +144,22 @@ export class BankingService {
         where: { id_bank_account: destination_bank_account },
       });
       await this.checkOperationValidity(source, destination, amount, issuer);
+      await this.prisma.bankOperations.create({
+        data: {
+          amount,
+          service_id: issuer.id_service ?? undefined,
+          user_id: issuer.id_user ?? undefined,
+          account_id: destination_bank_account,
+          type: OperationType.DEPOSIT,
+        },
+      });
       return await this.prisma.bankOperations.create({
         data: {
           amount,
           service_id: issuer.id_service ?? undefined,
           user_id: issuer.id_user ?? undefined,
-          source_account_id: source_bank_account,
+          account_id: source_bank_account,
+          type: OperationType.WITHDRAWAL,
         },
       });
     } catch (error) {
