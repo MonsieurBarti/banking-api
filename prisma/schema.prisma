@@ -1,0 +1,70 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Users {
+  id_user   String   @id @default(uuid()) @db.Uuid
+  firstname String   @db.VarChar(255)
+  lastname  String   @db.VarChar(255)
+  email     String   @db.VarChar(255)
+  password  String   @db.VarChar(255)
+  age       Int
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  BankAccounts   BankAccounts[]
+  BankOperations BankOperations[]
+  @@map("users")
+}
+
+model Services {
+  id_service String   @id @default(uuid()) @db.Uuid
+  name       String   @db.VarChar(255)
+  secret_key String   @db.VarChar(255)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+
+  BankOperations BankOperations[]
+  @@map("services")
+}
+
+model BankAccounts {
+  id_bank_account String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(255)
+  balance         Float    @default(0)
+  is_blocked      Boolean  @default(false)
+  owner           Users    @relation(fields: [owner_id], references: [id_user])
+  owner_id        String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  BankOperations BankOperations[]
+  @@map("bank_accounts")
+}
+
+model BankOperations {
+  id_bank_operation String       @id @default(uuid()) @db.Uuid
+  amount            Float
+  is_canceled       Boolean      @default(false)
+  service           Services?    @relation(fields: [service_id], references: [id_service])
+  service_id        String?      @db.Uuid
+  user              Users?       @relation(fields: [user_id], references: [id_user])
+  user_id           String?      @db.Uuid
+  source_account    BankAccounts @relation(fields: [source_account_id], references: [id_bank_account])
+  source_account_id String       @db.Uuid
+  createdAt         DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@map("bank_operations")
+}
+
+enum OperationType {
+  DEPOSIT
+  WITHDRAWAL
+}
