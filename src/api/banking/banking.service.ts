@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppException } from '@utils/app-exception';
-import { BankAccounts, BankOperations, OperationType } from '@prisma/client';
+import { BankAccounts, BankOperations } from '@prisma/client';
 import {
   CreateAccount,
   CreateAccountResponse,
@@ -50,26 +50,37 @@ export class BankingService {
       const bankAccount = await this.prisma.bankAccounts.findUnique({
         where: { id_bank_account },
         include: {
-          BankOperations: {
+          BankWithdrawals: {
             orderBy: {
               createdAt: 'desc',
             },
-            take: 30,
+            take: 15,
+          },
+          BankDeposits: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 15,
           },
         },
       });
       let withdrawals = 0;
+      bankAccount.BankWithdrawals.map((withdrawal) => {
+        if (!withdrawal.is_canceled && !withdrawal.is_completed)
+          withdrawals += withdrawal.amount;
+      });
       let deposits = 0;
-      bankAccount.BankOperations.map((operation) => {
-        if (!operation.is_canceled && !operation.is_completed) {
-          operation.type === OperationType.WITHDRAWAL
-            ? (withdrawals += operation.amount)
-            : (deposits += operation.amount);
-        }
+      bankAccount.BankDeposits.map((deposit) => {
+        if (!deposit.is_canceled && !deposit.is_completed)
+          deposits += deposit.amount;
       });
       return {
         ...bankAccount,
-        balance: bankAccount.balance + deposits - withdrawals,
+        balance:
+          Math.round(
+            (bankAccount.balance - withdrawals + deposits + Number.EPSILON) *
+              100,
+          ) / 100,
       };
     } catch (error) {
       throw new AppException(
@@ -98,7 +109,7 @@ export class BankingService {
         where: { id_bank_account },
         data: {
           is_blocked: true,
-          BankOperations: {
+          BankWithdrawals: {
             updateMany: {
               where: {
                 createdAt: {
@@ -110,7 +121,7 @@ export class BankingService {
           },
         },
         include: {
-          BankOperations: {
+          BankWithdrawals: {
             where: {
               createdAt: {
                 gte: opposition_date,
@@ -144,22 +155,13 @@ export class BankingService {
         where: { id_bank_account: destination_bank_account },
       });
       await this.checkOperationValidity(source, destination, amount, issuer);
-      await this.prisma.bankOperations.create({
-        data: {
-          amount,
-          service_id: issuer.id_service ?? undefined,
-          user_id: issuer.id_user ?? undefined,
-          account_id: destination_bank_account,
-          type: OperationType.DEPOSIT,
-        },
-      });
       return await this.prisma.bankOperations.create({
         data: {
           amount,
           service_id: issuer.id_service ?? undefined,
           user_id: issuer.id_user ?? undefined,
-          account_id: source_bank_account,
-          type: OperationType.WITHDRAWAL,
+          from_id: source_bank_account,
+          to_id: destination_bank_account,
         },
       });
     } catch (error) {

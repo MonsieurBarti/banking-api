@@ -44,29 +44,31 @@ model BankAccounts {
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @db.Timestamptz(6)
 
-  BankOperations BankOperations[]
+  BankWithdrawals BankOperations[] @relation("FROM")
+  BankDeposits    BankOperations[] @relation("TO")
   @@map("bank_accounts")
 }
 
 model BankOperations {
-  id_bank_operation String        @id @default(uuid()) @db.Uuid
+  id_bank_operation String       @id @default(uuid()) @db.Uuid
   amount            Float
-  type              OperationType
-  is_canceled       Boolean       @default(false)
-  is_completed      Boolean       @default(false)
-  service           Services?     @relation(fields: [service_id], references: [id_service])
-  service_id        String?       @db.Uuid
-  user              Users?        @relation(fields: [user_id], references: [id_user])
-  user_id           String?       @db.Uuid
-  account           BankAccounts  @relation(fields: [account_id], references: [id_bank_account])
-  account_id        String        @db.Uuid
-  createdAt         DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime      @updatedAt @db.Timestamptz(6)
+  is_canceled       Boolean      @default(false)
+  is_completed      Boolean      @default(false)
+  service           Services?    @relation(fields: [service_id], references: [id_service])
+  service_id        String?      @db.Uuid
+  user              Users?       @relation(fields: [user_id], references: [id_user])
+  user_id           String?      @db.Uuid
+  from              BankAccounts @relation("FROM", fields: [from_id], references: [id_bank_account])
+  from_id           String       @db.Uuid
+  to                BankAccounts @relation("TO", fields: [to_id], references: [id_bank_account])
+  to_id             String       @db.Uuid
+  createdAt         DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @db.Timestamptz(6)
 
   @@map("bank_operations")
 }
 
-enum OperationType {
-  DEPOSIT
-  WITHDRAWAL
-}
+// enum OperationType {
+//   DEPOSIT
+//   WITHDRAWAL
+// }
